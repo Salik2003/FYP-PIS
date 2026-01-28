@@ -1,0 +1,1 @@
+export const SHOPIFY_HOST = '100-pure-2.myshopify.com'

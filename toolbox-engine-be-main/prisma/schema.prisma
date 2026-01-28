@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+}
+
+model DataSource {
+  id           Int                @id @default(autoincrement())
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  name         String             @unique
+  apiKey       String             @unique
+  engineApiKey String             @unique
+  url          String             @unique
+  active       Boolean            @default(false)
+  status       DataSourceStatus   @default("NEW")
+  message      String?
+  order        Int                @default(99999)
+  entities     DataSourceEntity[]
+}
+
+model DataSourceEntity {
+  id             Int                    @id @default(autoincrement())
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  dataSourceId   Int
+  name           String
+  status         DataSourceEntityStatus
+  order          Int                    @default(99999)
+  data           DataSourceData[]       @relation("entity")
+  dataSource     DataSource             @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  fields         DataSourceField[]
+  foreignKeyRefs DataSourceForeignKey[] @relation("refEntity")
+  foreignKeys    DataSourceForeignKey[] @relation("entity")
+
+  @@unique([dataSourceId, name])
+}
+
+model DataSourceField {
+  id                  Int                         @id @default(autoincrement())
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  entityId            Int
+  name                String
+  type                String
+  primary             Boolean                     @default(false)
+  status              DataSourceFieldStatus
+  order               Int                         @default(99999)
+  entity              DataSourceEntity            @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  foreignKeyRefFields DataSourceForeignKeyField[] @relation("refField")
+  foreignKeyFields    DataSourceForeignKeyField[] @relation("field")
+  values              DataSourceValue[]           @relation("field")
+
+  @@unique([entityId, name])
+}
+
+model DataSourceData {
+  id        Int               @id @default(autoincrement())
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  entityId  Int
+  deleted   Boolean           @default(false)
+  updatedBy String?
+  entity    DataSourceEntity  @relation("entity", fields: [entityId], references: [id], onDelete: Cascade)
+  values    DataSourceValue[] @relation("data")
+}
+
+model DataSourceValue {
+  id        Int             @id @default(autoincrement())
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  dataId    Int
+  fieldId   Int
+  value     String?
+  active    Boolean
+  updatedBy String?
+  field     DataSourceField @relation("field", fields: [fieldId], references: [id], onDelete: Cascade)
+  data      DataSourceData  @relation("data", fields: [dataId], references: [id], onDelete: Cascade)
+
+  @@unique([dataId, fieldId])
+}
+
+model DataSourceForeignKey {
+  id          Int                         @id @default(autoincrement())
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  entityId    Int
+  refEntityId Int
+  refEntity   DataSourceEntity            @relation("refEntity", fields: [refEntityId], references: [id], onDelete: Cascade)
+  entity      DataSourceEntity            @relation("entity", fields: [entityId], references: [id], onDelete: Cascade)
+  fields      DataSourceForeignKeyField[]
+
+  @@unique([entityId, refEntityId])
+}
+
+model DataSourceForeignKeyField {
+  id           Int                  @id @default(autoincrement())
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  foreignKeyId Int
+  fieldId      Int
+  refFieldId   Int
+  refField     DataSourceField      @relation("refField", fields: [refFieldId], references: [id], onDelete: Cascade)
+  field        DataSourceField      @relation("field", fields: [fieldId], references: [id], onDelete: Cascade)
+  foreignKey   DataSourceForeignKey @relation(fields: [foreignKeyId], references: [id], onDelete: Cascade)
+
+  @@unique([foreignKeyId, fieldId, refFieldId])
+}
+
+model DataSourcePull {
+  id             Int                      @id @default(autoincrement())
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  targetType     DataSourcePullTargetType
+  targetId       Int
+  count          Int                      @default(0)
+  pulledCount    Int                      @default(0)
+  submittedCount Int                      @default(0)
+  status         DataSourcePullStatus     @default("CREATED")
+  data           DataSourcePullData[]
+}
+
+model DataSourcePullData {
+  id               Int            @id @default(autoincrement())
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  dataSourcePullId Int
+  data             Json?
+  dataSourcePull   DataSourcePull @relation(fields: [dataSourcePullId], references: [id], onDelete: Cascade)
+}
+
+enum DataSourceStatus {
+  NEW
+  OK
+  BAD_REQUEST
+  FORBIDDEN
+  NOT_FOUND
+  REQUEST_TIMEOUT
+  UNKNOWN_ERROR
+}
+
+enum DataSourceEntityStatus {
+  ENABLED
+  DISABLED
+  REMOVED
+}
+
+enum DataSourceFieldStatus {
+  ENABLED
+  DISABLED
+  REMOVED
+}
+
+enum DataSourcePullStatus {
+  CREATED
+  PULLING
+  PULL_COMPLETED
+  PULL_FAILED
+  SUBMITTING
+  SUBMIT_COMPLETED
+  SUBMIT_FAILED
+}
+
+enum DataSourcePullTargetType {
+  DATA_SOURCE
+  TABLE
+  ROW
+  CELL
+}
