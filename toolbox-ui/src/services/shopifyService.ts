@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const API_HOST = window.location.hostname;
-const API_URL = `http://${API_HOST}:3000/api/shopify-api`; // Adjust base URL as needed
+const API_URL = import.meta.env.VITE_SHOPIFY_API_URL ?? `http://${API_HOST}:3000/api/shopify-api`;
 
 
 

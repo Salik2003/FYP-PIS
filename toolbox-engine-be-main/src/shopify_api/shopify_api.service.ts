@@ -10,6 +10,19 @@ export class ShopifyService {
     private readonly accessToken: string;
     private readonly apiVersion: string;
 
+    private readonly cache = new Map<string, { data: any; expires: number }>();
+    private readonly CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+    private readonly inflight = new Map<string, Promise<any>>();
+
+    private getCached(key: string): any | null {
+        const entry = this.cache.get(key);
+        if (!entry || Date.now() > entry.expires) { this.cache.delete(key); return null; }
+        return entry.data;
+    }
+    private setCached(key: string, data: any): void {
+        this.cache.set(key, { data, expires: Date.now() + this.CACHE_TTL });
+    }
+
     constructor(
         private readonly httpService: HttpService,
         private readonly configService: ConfigService,
@@ -62,6 +75,18 @@ export class ShopifyService {
     }
 
     async getProducts(): Promise<any[]> {
+        const cached = this.getCached('products');
+        if (cached) { this.logger.log('Products served from cache'); return cached; }
+        if (this.inflight.has('products')) {
+            this.logger.log('Products already in-flight — reusing promise');
+            return this.inflight.get('products');
+        }
+        const promise = this._fetchProducts().finally(() => this.inflight.delete('products'));
+        this.inflight.set('products', promise);
+        return promise;
+    }
+
+    private async _fetchProducts(): Promise<any[]> {
         this.logger.log('Fetching all products from Shopify...');
         let allProducts = [];
         let url: string | null = `https://${this.shopDomain}/admin/api/${this.apiVersion}/products.json?limit=250`;
@@ -84,16 +109,17 @@ export class ShopifyService {
             }
         } catch (error) {
             this.logger.error('Error fetching products from Shopify', error.response?.data || error.message);
-            // Return what we have so far or throw
         }
 
+        this.setCached('products', allProducts);
         return allProducts;
     }
 
-    async getOrders(): Promise<any[]> {
-        this.logger.log('Fetching all orders from Shopify...');
+    async getOrders(maxItems = 100): Promise<any[]> {
+        this.logger.log(`Fetching orders from Shopify (max: ${maxItems})...`);
+        const pageSize = Math.min(maxItems, 250);
         let allOrders = [];
-        let url: string | null = `https://${this.shopDomain}/admin/api/${this.apiVersion}/orders.json?status=any&limit=250`;
+        let url: string | null = `https://${this.shopDomain}/admin/api/${this.apiVersion}/orders.json?status=any&limit=${pageSize}`;
 
         try {
             while (url) {
@@ -109,13 +135,13 @@ export class ShopifyService {
                 this.logger.log(`Fetched ${orders.length} orders. Total so far: ${allOrders.length}`);
 
                 const linkHeader = response.headers['link'] as string | undefined;
-                url = this.getNextPageUrl(linkHeader);
+                url = allOrders.length >= maxItems ? null : this.getNextPageUrl(linkHeader);
             }
         } catch (error) {
             this.logger.error('Error fetching orders from Shopify', error.response?.data || error.message);
         }
 
-        return allOrders;
+        return allOrders.slice(0, maxItems);
     }
 
 

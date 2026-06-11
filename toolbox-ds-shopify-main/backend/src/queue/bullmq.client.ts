@@ -78,9 +78,12 @@ export class BullMQClient {
     }
 
     private getConnection() {
+        const useTls = this.configService.get<string>('BULLMQ_REDIS_TLS', 'false') === 'true';
         return {
             host: this.configService.get<string>('BULLMQ_REDIS_HOST', 'localhost'),
             port: this.configService.get<number>('BULLMQ_REDIS_PORT', 6379),
+            password: this.configService.get<string>('BULLMQ_REDIS_PASSWORD'),
+            ...(useTls ? { tls: {} } : {}),
         };
     }
 }

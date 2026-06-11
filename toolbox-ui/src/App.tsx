@@ -4,14 +4,15 @@ import Login from './pages/Login';
 import EngineDashboard from './pages/EngineDashboard';
 import ProductList from './pages/ProductList';
 import AdminDashboard from './pages/AdminDashboard';
-
-// Mock Auth Check (Replace with Context later)
-const isAuthenticated = () => {
-  return !!localStorage.getItem('token');
-};
+import CompliancePage from './pages/CompliancePage';
+import ConflictPage from './pages/ConflictPage';
+import FinancePage from './pages/FinancePage';
+import MarginPage from './pages/MarginPage';
+import { useAuth } from './context/AuthProvider';
 
 const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
-  if (!isAuthenticated()) {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
   return children;
@@ -30,6 +31,10 @@ function App() {
         }>
           <Route index element={<EngineDashboard />} />
           <Route path="pis" element={<ProductList />} />
+          <Route path="compliance" element={<CompliancePage />} />
+          <Route path="conflicts" element={<ConflictPage />} />
+          <Route path="finance" element={<FinancePage />} />
+          <Route path="margins" element={<MarginPage />} />
           <Route path="admin" element={<AdminDashboard />} />
         </Route>
       </Routes>

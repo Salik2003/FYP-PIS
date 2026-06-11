@@ -22,12 +22,17 @@ import { ShopifyModule } from './shopify/shopify.module';
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: async (config: ConfigService) => ({
-        connection: {
-          host: config.get<string>('BULLMQ_REDIS_HOST', "localhost"),
-          port: config.get<number>('BULLMQ_REDIS_PORT', 6379),
-        },
-      }),
+      useFactory: async (config: ConfigService) => {
+        const useTls = config.get<string>('BULLMQ_REDIS_TLS', 'false') === 'true';
+        return {
+          connection: {
+            host: config.get<string>('BULLMQ_REDIS_HOST', 'localhost'),
+            port: config.get<number>('BULLMQ_REDIS_PORT', 6379),
+            password: config.get<string>('BULLMQ_REDIS_PASSWORD'),
+            ...(useTls ? { tls: {} } : {}),
+          },
+        };
+      },
     }),
     EventEmitterModule.forRoot(),
     ProductsModule,

@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { ShopifyService } from './shopify_api.service';
 
 @Controller('shopify-api')
@@ -16,8 +16,8 @@ export class ShopifyController {
     }
 
     @Get('orders')
-    async getOrders() {
-        return this.shopifyService.getOrders();
+    async getOrders(@Query('limit') limit?: string) {
+        return this.shopifyService.getOrders(limit ? parseInt(limit, 10) : 100);
     }
 
 

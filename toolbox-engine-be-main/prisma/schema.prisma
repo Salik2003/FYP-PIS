@@ -3,15 +3,21 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
-  password  String
-  createdAt DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  username   String   @unique
+  password   String
+  name       String   @default("User")
+  email      String   @default("")
+  role       String   @default("USER")
+  department String   @default("General")
+  status     String   @default("ACTIVE")
+  lastLogin  DateTime @default(now())
+  createdAt  DateTime @default(now())
 }
 
 model DataSource {
@@ -23,7 +29,7 @@ model DataSource {
   engineApiKey String             @unique
   url          String             @unique
   active       Boolean            @default(false)
-  status       DataSourceStatus   @default("NEW")
+  status       DataSourceStatus   @default(NEW)
   message      String?
   order        Int                @default(99999)
   entities     DataSourceEntity[]
@@ -126,7 +132,7 @@ model DataSourcePull {
   count          Int                      @default(0)
   pulledCount    Int                      @default(0)
   submittedCount Int                      @default(0)
-  status         DataSourcePullStatus     @default("CREATED")
+  status         DataSourcePullStatus     @default(CREATED)
   data           DataSourcePullData[]
 }
 
@@ -137,6 +143,30 @@ model DataSourcePullData {
   dataSourcePullId Int
   data             Json?
   dataSourcePull   DataSourcePull @relation(fields: [dataSourcePullId], references: [id], onDelete: Cascade)
+}
+
+model ComplianceRecord {
+  id          Int      @id @default(autoincrement())
+  productSku  String
+  productName String
+  regulation  String
+  status      String   @default("COMPLIANT")
+  auditDate   DateTime @default(now())
+  nextAudit   DateTime?
+  notes       String?
+  auditedBy   String   @default("System")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  action      String
+  entity      String
+  entityId    String
+  description String
+  performedBy String   @default("system")
+  createdAt   DateTime @default(now())
 }
 
 enum DataSourceStatus {

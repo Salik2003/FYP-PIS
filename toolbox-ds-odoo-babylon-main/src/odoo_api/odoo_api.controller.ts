@@ -1,183 +1,132 @@
-import {
-  Controller,
-  Get,
-  Query,
-  Session,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Get, Query, HttpException, HttpStatus } from '@nestjs/common';
 import { OdooService } from './odoo_api.service';
 
 @Controller('odoo')
 export class OdooController {
-  constructor(private readonly odooService: OdooService) {}
+  constructor(private readonly odoo: OdooService) {}
 
-  @Get('products')
-  async getProducts(@Session() session: any, @Query('page') page = 1) {
-    if (!session['uid']) {
-      throw new HttpException('Not authenticated', HttpStatus.UNAUTHORIZED);
-    }
+  @Get('status')
+  getStatus() {
+    return { connected: this.odoo.isReady() };
+  }
 
-    const limit = 100;
-    const offset = (page - 1) * limit;
-    this.odooService.initUrls(session['base_url']);
-
+  @Get('products/all')
+  async getAllProducts() {
     try {
-      const rows = await this.odooService.executeKw(
-        session,
+      // v2: includes standard_price (cost of goods) for margin analysis
+      return await this.odoo.cachedFetchAll(
+        'products:all:v2',
         'product.template',
-        'search_read',
-        [[]],
-        {
-          fields: ['id', 'name', 'list_price'],
-          limit,
-          offset,
-        },
+        [['active', '=', true]],
+        ['id', 'name', 'list_price', 'standard_price', 'default_code', 'type', 'categ_id', 'active', 'description_sale'],
       );
-      return rows;
-    } catch (error: any) {
-      throw new HttpException(
-        error?.message || 'Failed to fetch products',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    } catch (e: any) {
+      throw new HttpException(e.message ?? 'Failed to fetch all products', HttpStatus.BAD_GATEWAY);
     }
   }
 
-  @Get('inventory')
-  async getInventory(@Session() session: any, @Query('page') page = 1) {
-    if (!session['uid']) {
-      throw new HttpException('Not authenticated', HttpStatus.UNAUTHORIZED);
-    }
-
-    const limit = 100;
-    const offset = (page - 1) * limit;
-    this.odooService.initUrls(session['base_url']);
-
+  @Get('products')
+  async getProducts(@Query('page') page = 1, @Query('limit') limit = 100) {
     try {
-      const rows = await this.odooService.executeKw(
-        session,
-        'stock.quant',
-        'search_read',
-        [[]],
-        {
-          fields: [
-            'id',
-            'product_id',
-            'location_id',
-            'quantity',
-            'reserved_quantity',
-          ],
-          limit,
-          offset,
-        },
+      const offset = (Number(page) - 1) * Number(limit);
+      return await this.odoo.cachedKw(
+        `products:${page}:${limit}`,
+        'product.template', 'search_read', [[]],
+        { fields: ['id', 'name', 'list_price', 'default_code', 'type', 'categ_id', 'active', 'description_sale'], limit: Number(limit), offset },
       );
-      return rows;
-    } catch (error: any) {
-      throw new HttpException(
-        error?.message || 'Failed to fetch inventory',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    } catch (e: any) {
+      throw new HttpException(e.message ?? 'Failed to fetch products', HttpStatus.BAD_GATEWAY);
     }
   }
 
   @Get('variants')
-  async getVariants(@Session() session: any, @Query('page') page = 1) {
-    if (!session['uid']) {
-      throw new HttpException('Not authenticated', HttpStatus.UNAUTHORIZED);
-    }
-
-    const limit = 100;
-    const offset = (page - 1) * limit;
-    this.odooService.initUrls(session['base_url']);
-
+  async getVariants(@Query('page') page = 1, @Query('limit') limit = 100) {
     try {
-      const rows = await this.odooService.executeKw(
-        session,
-        'product.product',
-        'search_read',
-        [[]],
-        {
-          fields: [
-            'id',
-            'name',
-            'list_price',
-            'product_tmpl_id', // link to template
-            'default_code', // SKU / internal reference
-            'barcode', // barcode if available
-          ],
-          limit,
-          offset,
-        },
+      const offset = (Number(page) - 1) * Number(limit);
+      return await this.odoo.cachedKw(
+        `variants:${page}:${limit}`,
+        'product.product', 'search_read', [[]],
+        { fields: ['id', 'name', 'default_code', 'barcode', 'list_price', 'product_tmpl_id', 'active'], limit: Number(limit), offset },
       );
-      return rows;
-    } catch (error: any) {
-      throw new HttpException(
-        error?.message || 'Failed to fetch variants',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    } catch (e: any) {
+      throw new HttpException(e.message ?? 'Failed to fetch variants', HttpStatus.BAD_GATEWAY);
     }
   }
 
-  @Get('locations')
-  async getLocations(@Session() session: any, @Query('page') page = 1) {
-    if (!session['uid']) {
-      throw new HttpException('Not authenticated', HttpStatus.UNAUTHORIZED);
-    }
-
-    const limit = 100;
-    const offset = (page - 1) * limit;
-    this.odooService.initUrls(session['base_url']);
-
-    const domain: any[] = [
-      ['usage', 'in', ['internal', 'transit']],
-      ['active', '=', true],
-    ];
-
-    const context = {
-      lang: session?.lang || 'en_US',
-      tz: session?.tz || 'UTC',
-      allowed_company_ids:
-        session?.allowed_company_ids ||
-        (session?.company_id ? [session.company_id] : undefined),
-    };
-
+  @Get('orders')
+  async getOrders(@Query('page') page = 1, @Query('limit') limit = 50) {
     try {
-      const rows = await this.odooService.executeKw(
-        session,
-        'stock.location',
-        'search_read',
-        [domain],
+      const offset = (Number(page) - 1) * Number(limit);
+      return await this.odoo.cachedKw(
+        `orders:${page}:${limit}`,
+        'sale.order', 'search_read', [[]],
+        { fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'currency_id'], limit: Number(limit), offset },
+      );
+    } catch (e: any) {
+      throw new HttpException(e.message ?? 'Failed to fetch orders', HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Get('inventory')
+  async getInventory(@Query('page') page = 1, @Query('limit') limit = 100) {
+    try {
+      const offset = (Number(page) - 1) * Number(limit);
+      return await this.odoo.cachedKw(
+        `inventory:${page}:${limit}`,
+        'stock.quant', 'search_read',
+        [[['location_id.usage', '=', 'internal']]],
+        { fields: ['id', 'product_id', 'location_id', 'quantity', 'reserved_quantity'], limit: Number(limit), offset },
+      );
+    } catch (e: any) {
+      throw new HttpException(e.message ?? 'Failed to fetch inventory', HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Get('invoices')
+  async getInvoices() {
+    try {
+      return await this.odoo.cachedKw(
+        'invoices:posted:2000',
+        'account.move', 'search_read',
+        [[['move_type', '=', 'out_invoice'], ['state', '=', 'posted']]],
         {
-          fields: [
-            'id',
-            'name',
-            'complete_name',
-            'display_name',
-            'usage',
-            'company_id',
-            'parent_path',
-          ],
-          limit,
-          offset,
-          context,
+          fields: ['id', 'name', 'partner_id', 'invoice_date', 'invoice_date_due', 'amount_total', 'amount_residual', 'payment_state'],
+          limit: 2000,
+          order: 'invoice_date desc',
         },
       );
+    } catch (e: any) {
+      throw new HttpException(e.message ?? 'Failed to fetch invoices', HttpStatus.BAD_GATEWAY);
+    }
+  }
 
-      const normalized = (rows as any[]).map((r) => ({
-        id: r.id,
-        name: r.name,
-        usage: r.usage,
-        company_id: r.company_id,
-        parent_path: r.parent_path,
-        complete_name: r.complete_name || r.display_name || r.name,
-      }));
-
-      return normalized;
-    } catch (error: any) {
-      throw new HttpException(
-        `${error?.message || 'Failed to fetch locations'}`,
-        HttpStatus.INTERNAL_SERVER_ERROR,
+  @Get('purchase-orders')
+  async getPurchaseOrders() {
+    try {
+      return await this.odoo.cachedKw(
+        'purchase-orders:2000',
+        'purchase.order', 'search_read', [[]],
+        {
+          fields: ['id', 'name', 'partner_id', 'date_order', 'date_planned', 'amount_total', 'state', 'currency_id', 'partner_ref'],
+          limit: 2000,
+          order: 'date_order desc',
+        },
       );
+    } catch (e: any) {
+      throw new HttpException(e.message ?? 'Failed to fetch purchase orders', HttpStatus.BAD_GATEWAY);
+    }
+  }
+
+  @Get('stats')
+  async getStats() {
+    try {
+      const [productCount, orderCount] = await Promise.all([
+        this.odoo.executeKw('product.template', 'search_count', [[['active', '=', true]]]),
+        this.odoo.executeKw('sale.order', 'search_count', [[]]),
+      ]);
+      return { totalProducts: productCount, totalOrders: orderCount, connected: true };
+    } catch (e: any) {
+      return { totalProducts: 0, totalOrders: 0, connected: false, error: e.message };
     }
   }
 }

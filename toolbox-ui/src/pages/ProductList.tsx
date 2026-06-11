@@ -1,179 +1,213 @@
 import { useState, useEffect } from 'react';
-import {
-    Paper,
-    Typography,
-    Box,
-    CircularProgress,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    Stack,
-    Breadcrumbs,
-    Link as MuiLink
-} from '@mui/material';
-import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import { Box, Typography, CircularProgress, Select, MenuItem, FormControl, InputLabel, Button, Chip } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import shopifyIcon from '../assets/shopify-icon.png';
+import odooIcon from '../assets/odoo-icon.png';
 import { pisService } from '../services/pisService';
 import { shopifyService } from '../services/shopifyService';
+import { odooService } from '../services/odooService';
 import type { DataSource, DataSourceEntity } from '../types/pis.types';
 import EntityDataGrid from '../components/pis/EntityDataGrid';
 
+// Default entities for known sources — shown even before a real sync
+const DEFAULT_ENTITIES: Record<string, Array<{ id: number; name: string }>> = {
+    'Shopify Store': [
+        { id: -1, name: 'Product' },
+        { id: -2, name: 'Order' },
+    ],
+    'Odoo ERP': [
+        { id: -10, name: 'Product' },
+        { id: -11, name: 'Inventory' },
+        { id: -12, name: 'Sales Order' },
+    ],
+};
+
+const DS_ICON: Record<string, string> = {
+    'Shopify Store': shopifyIcon,
+    'Odoo ERP': odooIcon,
+};
+
 export default function ProductList() {
-    // State
     const [dataSources, setDataSources] = useState<DataSource[]>([]);
-    const [selectedDsId, setSelectedDsId] = useState<number | string>('');
-
-    const [entities, setEntities] = useState<DataSourceEntity[]>([]);
-    const [selectedEntityId, setSelectedEntityId] = useState<number | string>('');
-    const [selectedEntityName, setSelectedEntityName] = useState<string>('');
-
+    const [selectedDsId, setSelectedDsId] = useState<number | ''>('');
+    const [entities, setEntities] = useState<Array<{ id: number; name: string }>>([]);
+    const [selectedEntityId, setSelectedEntityId] = useState<number | ''>('');
+    const [selectedEntityName, setSelectedEntityName] = useState('');
     const [entityData, setEntityData] = useState<any[]>([]);
-    const [loading, setLoading] = useState<boolean>(false);
-    const [dataLoading, setDataLoading] = useState<boolean>(false);
+    const [loadingEntities, setLoadingEntities] = useState(false);
+    const [loadingData, setLoadingData] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
 
-    // Fetch Data Sources on mount
+    // Load data sources
     useEffect(() => {
-        const fetchDataSources = async () => {
-            try {
-                const ds = await pisService.getAllDataSources();
-                setDataSources(ds);
-                if (ds.length > 0) {
-                    setSelectedDsId(ds[0].id);
-                }
-            } catch (error) {
-                console.error("Failed to fetch data sources", error);
-            }
-        };
-        fetchDataSources();
+        pisService.getAllDataSources().then(ds => {
+            setDataSources(ds);
+            if (ds.length > 0) setSelectedDsId(ds[0].id);
+        }).catch(console.error);
     }, []);
 
-    // Fetch Entities when DS is selected
+    // Load entities when DS changes
     useEffect(() => {
         if (!selectedDsId) return;
+        setLoadingEntities(true);
+        setEntityData([]);
+        setSelectedEntityId('');
+        setSelectedEntityName('');
 
-        const fetchEntities = async () => {
-            setLoading(true);
-            try {
-                const ents = await pisService.getEntities(Number(selectedDsId));
-                setEntities(ents);
+        const dsName = dataSources.find(d => d.id === Number(selectedDsId))?.name ?? '';
 
-                if (ents.length > 0) {
-                    setSelectedEntityId(ents[0].id);
-                    setSelectedEntityName(ents[0].name || `Entity ${ents[0].id}`);
-                } else {
-                    setSelectedEntityId('');
-                    setSelectedEntityName('');
-                    setEntityData([]);
-                }
-            } catch (error) {
-                console.error("Failed to fetch entities", error);
-            } finally {
-                setLoading(false);
+        pisService.getEntities(Number(selectedDsId)).then(ents => {
+            const resolved = ents.length > 0
+                ? ents.map((e: DataSourceEntity) => ({ id: e.id, name: e.name }))
+                : (DEFAULT_ENTITIES[dsName] ?? []);
+
+            setEntities(resolved);
+            if (resolved.length > 0) {
+                setSelectedEntityId(resolved[0].id);
+                setSelectedEntityName(resolved[0].name);
             }
-        };
-        fetchEntities();
-    }, [selectedDsId]);
+        }).catch(() => {
+            const fallback = DEFAULT_ENTITIES[dsName] ?? [];
+            setEntities(fallback);
+            if (fallback.length > 0) { setSelectedEntityId(fallback[0].id); setSelectedEntityName(fallback[0].name); }
+        }).finally(() => setLoadingEntities(false));
+    }, [selectedDsId, dataSources]);
 
-    // Fetch Data when Entity is selected
+    // Load data when entity or refresh changes
     useEffect(() => {
-        if (!selectedEntityId) return;
+        if (!selectedEntityName || !selectedDsId) return;
 
-        const fetchData = async () => {
-            setDataLoading(true);
-            try {
-                // Check if we are looking at Shopify's Product or Order entity
-                const ds = dataSources.find(ds => ds.id === Number(selectedDsId));
-                const isShopify = ds?.name === 'Shopify Store';
-                const isProduct = selectedEntityName.toLowerCase() === 'product';
-                const isOrder = selectedEntityName.toLowerCase() === 'order';
+        const dsName = dataSources.find(d => d.id === Number(selectedDsId))?.name ?? '';
+        const entityLower = selectedEntityName.toLowerCase();
 
-                let response: any;
+        setLoadingData(true);
+        setEntityData([]);
 
-                if (isShopify && isProduct) {
-                    const products = await shopifyService.getProducts();
-                    response = { data: products };
-                } else if (isShopify && isOrder) {
-                    const orders = await shopifyService.getOrders();
-                    response = { data: orders };
-                } else {
-                    response = await pisService.getEntityData(Number(selectedEntityId));
-                }
+        let fetchPromise: Promise<any[]>;
 
-                if (response && Array.isArray(response.data)) {
-                    setEntityData(response.data);
-                } else {
-                    setEntityData([]);
-                }
-            } catch (error) {
-                console.error("Failed to fetch entity data", error);
-                setEntityData([]);
-            } finally {
-                setDataLoading(false);
-            }
-        };
+        if (dsName === 'Shopify Store') {
+            fetchPromise = entityLower === 'product'
+                ? shopifyService.getProducts()
+                : shopifyService.getOrders();
+        } else if (dsName === 'Odoo ERP') {
+            fetchPromise = entityLower === 'product'
+                ? odooService.getProducts()
+                : entityLower === 'inventory'
+                    ? odooService.getInventory()
+                    : odooService.getOrders();
+        } else {
+            fetchPromise = pisService.getEntityData(Number(selectedEntityId)).then((res: any) =>
+                Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
+            );
+        }
 
-        fetchData();
-    }, [selectedEntityId]);
+        fetchPromise
+            .then(data => setEntityData(Array.isArray(data) ? data : []))
+            .catch(err => { console.error('Data fetch error', err); setEntityData([]); })
+            .finally(() => setLoadingData(false));
+    }, [selectedEntityId, selectedEntityName, refreshKey]);
+
+    const selectedDs = dataSources.find(d => d.id === Number(selectedDsId));
+    const dsIcon = selectedDs ? DS_ICON[selectedDs.name] : undefined;
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)', gap: 2 }}>
-            {/* Top Navigation / Selection Bar */}
-            <Paper elevation={0} sx={{ p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white' }}>
-                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                    <Typography variant="h6" sx={{ fontWeight: 700, mr: 2, color: 'text.primary', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box component="span" sx={{ color: 'primary.main' }}>PIS</Box>
-                    </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 100px)', gap: 2 }}>
 
-                    <FormControl size="small" sx={{ minWidth: 200 }}>
-                        <InputLabel id="ds-select-label" sx={{ fontSize: '0.875rem' }}>Data Source</InputLabel>
-                        <Select
-                            labelId="ds-select-label"
-                            label="Data Source"
-                            value={selectedDsId}
-                            onChange={(e) => setSelectedDsId(e.target.value)}
-                            sx={{ borderRadius: 1.5, bgcolor: '#f8fafc', '& .MuiSelect-select': { py: 1 } }}
-                        >
-                            {dataSources.map((ds) => (
-                                <MenuItem key={ds.id} value={ds.id}>{ds.name}</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
+            {/* Toolbar */}
+            <Box sx={{
+                bgcolor: '#fff', border: '1px solid #eef0f3', borderRadius: 2,
+                px: 2.5, py: 1.5, display: 'flex', alignItems: 'center', gap: 2,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.06)', flexWrap: 'wrap',
+            }}>
+                <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#1e293b', mr: 0.5 }}>PIS</Typography>
 
-                    <FormControl size="small" sx={{ minWidth: 200 }} disabled={loading}>
-                        <InputLabel id="ent-select-label" sx={{ fontSize: '0.875rem' }}>Entity</InputLabel>
-                        <Select
-                            labelId="ent-select-label"
-                            label="Entity"
-                            value={selectedEntityId}
-                            onChange={(e) => {
-                                const id = e.target.value;
-                                setSelectedEntityId(id);
-                                const ent = entities.find(en => en.id === Number(id));
-                                setSelectedEntityName(ent?.name || '');
-                            }}
-                            sx={{ borderRadius: 1.5, bgcolor: '#f8fafc', '& .MuiSelect-select': { py: 1 } }}
-                        >
-                            {entities.map((ent) => (
-                                <MenuItem key={ent.id} value={ent.id}>{ent.name}</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
+                {/* DS selector */}
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                    <InputLabel sx={{ fontSize: 13 }}>Data Source</InputLabel>
+                    <Select
+                        label="Data Source"
+                        value={selectedDsId}
+                        onChange={e => setSelectedDsId(Number(e.target.value))}
+                        sx={{ fontSize: 13, borderRadius: 1.5 }}
+                        renderValue={val => {
+                            const ds = dataSources.find(d => d.id === Number(val));
+                            if (!ds) return '';
+                            const ic = DS_ICON[ds.name];
+                            return (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    {ic && <img src={ic} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />}
+                                    <span>{ds.name}</span>
+                                </Box>
+                            );
+                        }}
+                    >
+                        {dataSources.map(ds => (
+                            <MenuItem key={ds.id} value={ds.id} sx={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                {DS_ICON[ds.name] && <img src={DS_ICON[ds.name]} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />}
+                                {ds.name}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
 
-                    <Box sx={{ flexGrow: 1 }} />
+                {/* Entity selector */}
+                <FormControl size="small" sx={{ minWidth: 150 }} disabled={loadingEntities}>
+                    <InputLabel sx={{ fontSize: 13 }}>Entity</InputLabel>
+                    <Select
+                        label="Entity"
+                        value={selectedEntityId}
+                        onChange={e => {
+                            const id = Number(e.target.value);
+                            setSelectedEntityId(id);
+                            setSelectedEntityName(entities.find(en => en.id === id)?.name ?? '');
+                        }}
+                        sx={{ fontSize: 13, borderRadius: 1.5 }}
+                    >
+                        {entities.map(ent => (
+                            <MenuItem key={ent.id} value={ent.id} sx={{ fontSize: 13 }}>{ent.name}</MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
 
-                    {/* Optional Right Side Stats or Actions could go here */}
-                </Stack>
-            </Paper>
+                {/* Status badge */}
+                {selectedDs && (
+                    <Chip size="small" label={selectedDs.active ? 'Connected' : 'Offline'}
+                        sx={{
+                            bgcolor: selectedDs.active ? '#ecfdf5' : '#fef2f2',
+                            color: selectedDs.active ? '#059669' : '#dc2626',
+                            border: `1px solid ${selectedDs.active ? '#a7f3d0' : '#fca5a5'}`,
+                            fontWeight: 600, fontSize: 11.5,
+                        }}
+                    />
+                )}
 
-            {/* Main Panel: Data Grid */}
-            <Box sx={{ flex: 1, minHeight: 0, width: '100%' }}>
+                <Box sx={{ flex: 1 }} />
+
+                {entityData.length > 0 && (
+                    <Box sx={{ px: 1.5, py: 0.4, bgcolor: '#f1f5f9', borderRadius: 1, fontSize: 12, color: '#64748b', fontWeight: 600 }}>
+                        {entityData.length.toLocaleString()} records
+                    </Box>
+                )}
+
+                <Button size="small" variant="outlined"
+                    startIcon={loadingData ? <CircularProgress size={13} color="inherit" /> : <RefreshIcon sx={{ fontSize: 16 }} />}
+                    onClick={() => setRefreshKey(k => k + 1)}
+                    disabled={loadingData || !selectedEntityId}
+                    sx={{ fontSize: 13, textTransform: 'none', color: '#64748b', borderColor: '#e2e8f0', borderRadius: 1.5 }}
+                >
+                    Refresh
+                </Button>
+            </Box>
+
+            {/* Data grid */}
+            <Box sx={{ flex: 1, minHeight: 0 }}>
                 <EntityDataGrid
                     data={entityData}
-                    loading={dataLoading}
+                    loading={loadingData}
                     entityName={selectedEntityName}
+                    sourceType={selectedDs?.name === 'Odoo ERP' ? 'odoo' : 'shopify'}
                 />
             </Box>
         </Box>
     );
 }
-

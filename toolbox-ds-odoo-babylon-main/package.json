@@ -7,8 +7,10 @@
   "license": "UNLICENSED",
   "scripts": {
     "format": "prettier --write \"**/*.js\"",
+    "build": "tsc -p tsconfig.json",
     "start": "ts-node src/main.ts",
     "start:dev": "nodemon --exec ts-node src/main.ts",
+    "start:prod": "node dist/main.js",
     "test": "jest",
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json"
@@ -27,6 +29,7 @@
     "express-session": "^1.18.2",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.2.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   },
   "devDependencies": {
@@ -43,8 +46,7 @@
     "nodemon": "3.1.9",
     "prettier": "3.5.3",
     "prisma": "^6.11.1",
-    "supertest": "7.1.0",
-    "ts-node": "^10.9.2"
+    "supertest": "7.1.0"
   },
   "jest": {
     "moduleFileExtensions": [
