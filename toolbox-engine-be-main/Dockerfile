@@ -4,6 +4,5 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 RUN npx prisma generate
-RUN npm run build
 EXPOSE 3000
-CMD ["node", "dist/main"]
+CMD ["npx", "ts-node", "-r", "tsconfig-paths/register", "src/main.ts"]
