@@ -32,8 +32,7 @@ export default function ConnectorStatusCards({ dataSources }: { dataSources: Dat
                                 }
                             </Box>
                             <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography sx={{ fontWeight: 600, fontSize: 14, color: '#1e293b', mb: 0.3 }}>{ds.name}</Typography>
-                                <Typography sx={{ fontSize: 11.5, color: '#94a3b8' }} noWrap>{ds.url ?? 'Connector service'}</Typography>
+                                <Typography sx={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>{ds.name}</Typography>
                             </Box>
                             <Chip
                                 icon={ds.active ? <CheckCircleIcon sx={{ fontSize: '13px !important' }} /> : <CancelIcon sx={{ fontSize: '13px !important' }} />}
