@@ -17,24 +17,27 @@ export class AuthService implements OnModuleInit {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) throw new UnauthorizedException('Invalid credentials');
 
-    const token = this.jwtService.sign({ username });
+    const token = this.jwtService.sign({ username, role: user.role, name: user.name });
     return { access_token: token };
   }
 
   async onModuleInit() {
-    const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-    const hashedPassword = bcrypt.hashSync(adminPassword, 10);
-    await this.prisma.user.upsert({
-      where: { username: adminUsername },
-      update: {
-        password: hashedPassword,
-      },
-      create: {
-        username: adminUsername,
-        password: hashedPassword,
-      },
-    });
-    this.logger.log(`Admin user created with username: ${adminUsername}`);
+    const seedUsers = [
+      { username: 'admin',      password: 'admin123',  role: 'ADMIN',      name: 'Administrator',  department: 'IT' },
+      { username: 'sales',      password: 'sales123',  role: 'SALES',      name: 'Sarah Sales',    department: 'Sales' },
+      { username: 'production', password: 'prod123',   role: 'PRODUCTION', name: 'Peter Production', department: 'Operations' },
+      { username: 'compliance', password: 'comply123', role: 'COMPLIANCE', name: 'Claire Compliance', department: 'Legal' },
+      { username: 'rd',         password: 'rd123',     role: 'R&D',        name: 'Raj Research',   department: 'R&D' },
+    ];
+
+    for (const u of seedUsers) {
+      const hashed = bcrypt.hashSync(u.password, 10);
+      await this.prisma.user.upsert({
+        where: { username: u.username },
+        update: { password: hashed, role: u.role, name: u.name, department: u.department },
+        create: { username: u.username, password: hashed, role: u.role, name: u.name, department: u.department },
+      });
+    }
+    this.logger.log('Demo users seeded: admin, sales, production, compliance, rd');
   }
 }

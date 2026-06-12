@@ -17,7 +17,6 @@ import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import logoIcon from '../../assets/PISync icon.png';
-import logoFull from '../../assets/logo PISync.png';
 import { useAuth } from '../../context/AuthProvider';
 
 const FULL = 230;
@@ -28,14 +27,14 @@ const ACCENT = '#4da5ff';
 const HOVER = 'rgba(255,255,255,0.07)';
 const ACTIVE = 'rgba(77,165,255,0.15)';
 
-const NAV = [
-    { text: 'Dashboard', icon: <DashboardIcon sx={{ fontSize: 20 }} />, path: '/' },
-    { text: 'PIS', icon: <InventoryIcon sx={{ fontSize: 20 }} />, path: '/pis' },
-    { text: 'Compliance', icon: <GppGoodIcon sx={{ fontSize: 20 }} />, path: '/compliance' },
-    { text: 'Conflicts', icon: <CompareArrowsIcon sx={{ fontSize: 20 }} />, path: '/conflicts' },
-    { text: 'Finance', icon: <AccountBalanceIcon sx={{ fontSize: 20 }} />, path: '/finance' },
-    { text: 'Margins', icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, path: '/margins' },
-    { text: 'Users', icon: <PeopleIcon sx={{ fontSize: 20 }} />, path: '/admin' },
+const ALL_NAV = [
+    { text: 'Dashboard', icon: <DashboardIcon sx={{ fontSize: 20 }} />, path: '/',           roles: ['ADMIN','SALES','PRODUCTION','COMPLIANCE','R&D','USER'] },
+    { text: 'PIS',       icon: <InventoryIcon sx={{ fontSize: 20 }} />, path: '/pis',         roles: ['ADMIN','SALES','PRODUCTION','R&D'] },
+    { text: 'Compliance',icon: <GppGoodIcon sx={{ fontSize: 20 }} />,   path: '/compliance',  roles: ['ADMIN','PRODUCTION','COMPLIANCE'] },
+    { text: 'Conflicts', icon: <CompareArrowsIcon sx={{ fontSize: 20 }} />, path: '/conflicts', roles: ['ADMIN','SALES','COMPLIANCE'] },
+    { text: 'Finance',   icon: <AccountBalanceIcon sx={{ fontSize: 20 }} />, path: '/finance', roles: ['ADMIN','SALES'] },
+    { text: 'Margins',   icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, path: '/margins',    roles: ['ADMIN','SALES','R&D'] },
+    { text: 'Users',     icon: <PeopleIcon sx={{ fontSize: 20 }} />,    path: '/admin',       roles: ['ADMIN'] },
 ];
 
 export default function MainLayout() {
@@ -45,7 +44,12 @@ export default function MainLayout() {
     const [notifAnchor, setNotifAnchor] = useState<null | HTMLElement>(null);
     const navigate = useNavigate();
     const location = useLocation();
-    const { logout } = useAuth();
+    const { logout, user } = useAuth();
+
+    const NAV = ALL_NAV.filter(n => n.roles.includes(user?.role ?? 'USER'));
+    const displayName = user?.name ?? 'User';
+    const displayRole = user?.role ?? 'USER';
+    const avatarLetter = displayName.charAt(0).toUpperCase();
 
     const w = collapsed ? MINI : FULL;
     const activeLabel = NAV.find(n => n.path === location.pathname)?.text ?? 'Dashboard';
@@ -140,10 +144,10 @@ export default function MainLayout() {
                     </Tooltip>
                 ) : (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 0.5 }}>
-                        <Avatar sx={{ width: 30, height: 30, bgcolor: ACCENT, fontSize: 12, fontWeight: 700, flexShrink: 0 }}>A</Avatar>
+                        <Avatar sx={{ width: 30, height: 30, bgcolor: ACCENT, fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{avatarLetter}</Avatar>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: '#fff', lineHeight: 1.3 }} noWrap>Admin</Typography>
-                            <Typography sx={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', lineHeight: 1 }}>Administrator</Typography>
+                            <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: '#fff', lineHeight: 1.3 }} noWrap>{displayName}</Typography>
+                            <Typography sx={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', lineHeight: 1 }}>{displayRole}</Typography>
                         </Box>
                         <Tooltip title="Logout">
                             <IconButton size="small" onClick={() => { logout(); navigate('/login'); }}
@@ -262,8 +266,8 @@ export default function MainLayout() {
                                 onClick={e => setMenuAnchor(e.currentTarget)}
                                 sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer', px: 1, py: 0.5, borderRadius: 1.5, '&:hover': { bgcolor: '#f1f5f9' } }}
                             >
-                                <Avatar sx={{ width: 28, height: 28, bgcolor: BRAND, fontSize: 11, fontWeight: 700 }}>A</Avatar>
-                                <Typography sx={{ fontSize: 13, fontWeight: 600, display: { xs: 'none', sm: 'block' }, color: '#1e293b' }}>Admin</Typography>
+                                <Avatar sx={{ width: 28, height: 28, bgcolor: BRAND, fontSize: 11, fontWeight: 700 }}>{avatarLetter}</Avatar>
+                                <Typography sx={{ fontSize: 13, fontWeight: 600, display: { xs: 'none', sm: 'block' }, color: '#1e293b' }}>{displayName}</Typography>
                             </Box>
                             <Menu
                                 anchorEl={menuAnchor}
